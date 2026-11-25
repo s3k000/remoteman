@@ -425,13 +425,23 @@ fn age_us(meta: &Metadata) -> u64 {
 pub static REFINE: AtomicBool = AtomicBool::new(true);
 const REFINE_AFTER: Duration = Duration::from_millis(400);
 const REFINE_FACTOR: u32 = 8;
+/// The refining frame's constant quantiser when `--refine-qp` gives one (1 to 51); 0 chooses it
+/// by the picture's size ([`refine_qp`]).
+pub static REFINE_QP: AtomicU32 = AtomicU32::new(0);
 /// The constant quantiser of the refining frame: finer for small pictures, coarser for large ones
-/// so the one frame stays within a couple of megabytes even for a page of dense text (measured on
-/// a worst-case 720p text pattern: QP 24 is 450 kB, 28 is 360 kB, 16 is 630 kB).
+/// so the one frame stays within a few megabytes even for a page of dense text (measured on a
+/// worst-case 720p text pattern: QP 24 is 450 kB, 28 is 360 kB, 16 is 630 kB). A 1440p monitor,
+/// ultrawide (3440x1440, 4.95 megapixels) or 2560x1600, keeps QP 24, about 2.4 MB for that page:
+/// at 32, which it had before, the still picture came out softer than the frames before it, and
+/// text in full screen went blurry the moment it stopped moving. 4K gets 28, larger 32.
 fn refine_qp(width: u32, height: u32) -> u32 {
+    let given = REFINE_QP.load(Ordering::Relaxed);
+    if given > 0 {
+        return given;
+    }
     match width as u64 * height as u64 {
-        0..=2_200_000 => 24,
-        2_200_001..=4_500_000 => 28,
+        0..=5_300_000 => 24,
+        5_300_001..=9_000_000 => 28,
         _ => 32,
     }
 }
